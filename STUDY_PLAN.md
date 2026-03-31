@@ -134,7 +134,85 @@ sh mqshutdown namesrv
 
 - [ ] Consumer 收到消息后，把动态写入粉丝的 Redis 订阅列表
 
-### 8
+### 8 — 权限系统（RBAC）（3月30日）
+
+#### 核心概念：RBAC 是什么
+
+**RBAC（Role-Based Access Control）基于角色的权限控制**，是最常见的权限设计方案。
+
+不直接给用户分配权限，而是：
+```
+用户 → 角色 → 权限
+```
+类比：你入职公司，HR 给你分配"普通员工"角色，角色决定你能看哪些系统、能做哪些操作。
+
+本项目定义了两个角色：
+- `Lv0`：新注册用户，权限最低
+- `Lv1`：普通用户，权限更多
+
+---
+
+#### 新增文件
+
+**domain/auth/（数据模型）**
+
+| 类 | 说明 |
+|----|------|
+| `AuthRole` | 角色（Lv0/Lv1） |
+| `UserRole` | 用户和角色的对应关系 |
+| `AuthMenu` | 菜单权限（能看哪些页面） |
+| `AuthElementOperation` | 按钮操作权限（能点哪些按钮） |
+| `AuthRoleMenu` | 角色拥有哪些菜单权限 |
+| `AuthRoleElementOperation` | 角色拥有哪些按钮操作权限 |
+| `UserAuthorities` | 汇总返回：用户的全部权限 |
+
+**业务逻辑**
+
+| Service | 说明 |
+|---------|------|
+| `UserRoleService` | 查询/新增用户的角色 |
+| `AuthRoleService` | 查询角色对应的菜单权限和操作权限 |
+| `UserAuthService` | 汇总：根据用户ID查出全部权限 |
+
+**接口**
+
+```
+GET /user-authorities    查询当前用户的所有权限（需 Token）
+```
+
+---
+
+#### 数据查询流程
+
+```
+用户ID
+  ↓ UserRoleService
+查出用户的角色列表（如 Lv0）
+  ↓ AuthRoleService
+根据角色查出：菜单权限列表 + 按钮操作权限列表
+  ↓
+封装成 UserAuthorities 返回
+```
+
+---
+
+#### 注册时自动分配角色
+
+用户注册成功后，`UserAuthService.addUserDefaultRole()` 自动给新用户分配 `Lv0` 角色。
+用户权限控制（User Permission Control）权限控制是什么？简单说就是：控制用户能在系统里做什么、不能做什么。它分两层：
+前端权限控制：控制用户能看到哪些页面、哪些按钮。比如你没登录B站，"发弹幕"的按钮可能是灰色的。
+后端权限控制：控制用户能调用哪些API、访问哪些数据。就算你前端绕过了按钮限制，后端也会拦住你。前端权限只是"体验优化"，后端才是真正的安全防线。
+t_auth_role — 角色表（Lv0-Lv6）
+t_auth_menu — 菜单表（页面/导航权限）
+t_auth_element_operation — 页面元素操作表（按钮级权限）
+
+关联表（中间表）：
+
+t_user_role — 用户↔角色（多对多）
+t_auth_role_menu — 角色↔菜单（多对多）
+
+关系链路： 用户 → （通过t_user_role）→ 角色 → （通过t_auth_role_menu）→ 菜单
+
 ### 9
 ### 10
 ### 11
